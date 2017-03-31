@@ -10,6 +10,10 @@
 #include <map>
 #include <queue>
 
+
+#define PTAG_START() {ptags::Ptag::start(__func__);}
+#define PTAG_STOP() {ptags::Ptag::stop(__func__);}
+
 namespace ptags {
 
   class DateTime {
@@ -24,13 +28,17 @@ namespace ptags {
     }
 }; // class DateTime
 
-static std::ofstream log_file;
-static std::map<std::string,
-  std::queue<std::chrono::time_point<std::chrono::high_resolution_clock>>> tag_table;
 
 class Ptag {
 
   public:
+
+    using ms = std::chrono::milliseconds;
+    using hi_res_clock = std::chrono::high_resolution_clock;
+    using hi_res_time_point = std::chrono::time_point<hi_res_clock>;
+
+    static std::ofstream log_file;
+    static std::map<std::string, std::queue<long>> tag_table;
    
     /**
      * @p PTag initializer
@@ -48,11 +56,10 @@ class Ptag {
      */
     static void start(const char* fn_name) {
       std::string fn = std::string(fn_name);
-      auto t = std::chrono::high_resolution_clock::now();
-      auto q = tag_table[fn];
-      q.push(t);
-      tag_table.insert(fn, q); 
-      log_file << format_output(fn, t, 0, "start");
+      auto t = std::chrono::duration_cast<ms>(hi_res_clock::now().time_since_epoch()).count();
+      tag_table[fn].push(t); 
+
+      log_file << format_output(fn, t, t, "start");
     }
 
     /**
@@ -62,11 +69,12 @@ class Ptag {
      */
     static void stop(const char* fn_name) {
       std::string fn = std::string(fn_name);
-      auto t = std::chrono::high_resolution_clock::now();
-      auto t0 = tag_table[fn].pop();
-      auto dif = std::chrono::duration_cast<std::chrono::milliseconds>(t - t0);
-      std::cout << std::string(fn_name) << std::endl;
-      log_file << format_output(std::string(fn_name), t, dif, "end");
+      auto t = std::chrono::duration_cast<ms>(hi_res_clock::now().time_since_epoch()).count();
+      
+      long t0 = tag_table[fn].front();
+      tag_table[fn].pop();
+      
+      log_file << format_output(fn, t0, t, "end");
     }
 
   private:
@@ -82,20 +90,25 @@ class Ptag {
      *
      * @return formatted string (@p std::string)
      */
-    std::string format_output(const std::string name,
-      const std::chrono::time_point<std::chrono::high_resolution_clock> t1,
-      const std::chrono::duration<std::chrono::milliseconds> dif, const std::string msg) {
+    static std::string format_output(const std::string name,
+      const long t1,
+      const long t2,
+      const std::string msg) {
+      
 
+      std::cout << "t1: " << t1 << "\nt2: " << t2 << std::endl;
+      std::cout << "dif: " << t2 - t1 << std::endl;
       std::stringstream ss;
       ss << ptags::DateTime::formatted_time_now() << "\t" << "[" << name << "]"
-         << "\t" << dif.count() << "\t" << msg << "\n";
+         << "\t" << t2 - t1 << "\t" << msg << "\n";
 
       return ss.str();
     }
 }; // class Ptag
+
+// Instantiate static member vars
+std::ofstream Ptag::log_file;
+std::map<std::string, std::queue<long>> Ptag::tag_table;
+
 }// namespace ptags
-
-#define PTAG_START() {ptags::Ptag::start(__func__);}
-#define PTAG_STOP() {ptags::Ptag::stop(__func__);}
-
 #endif // __PTAGS_H

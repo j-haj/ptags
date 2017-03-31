@@ -1,4 +1,4 @@
-CC := g++-6
+CC := g++
 
 CFALGS := -Wall -Wpedantic
 STD := -std=c++14

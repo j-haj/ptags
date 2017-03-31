@@ -8,6 +8,7 @@
 #include <sstream>
 #include <string>
 #include <map>
+#include <mutex>
 #include <queue>
 
 
@@ -16,16 +17,18 @@
 
 namespace ptags {
 
-  class DateTime {
-  public:
-    static std::string formatted_time_now(std::string fmt="%d-%m-%Y_%H_%M_%S") {
-      auto t = std::time(nullptr);
-      auto tm = *std::localtime(&t);
+std::mutex ptag_global_mutex;
 
-      std::ostringstream oss;
-      oss << std::put_time(&tm, fmt.c_str());
-      return oss.str();
-    }
+class DateTime {
+public:
+  static std::string formatted_time_now(std::string fmt="%d-%m-%Y_%H_%M_%S") {
+    auto t = std::time(nullptr);
+    auto tm = *std::localtime(&t);
+
+    std::ostringstream oss;
+    oss << std::put_time(&tm, fmt.c_str());
+    return oss.str();
+  }
 }; // class DateTime
 
 
@@ -45,8 +48,9 @@ class Ptag {
      *
      * @param log name of the log file used for storing ptags
      */ 
-    static void InitPTags(const std::string log="ptag_logs.out") {
-      log_file.open(log, std::ios::out);
+    static void InitPTags(const std::string log="ptag_logs") {
+      std::string filename = log + ptags::DateTime::formatted_time_now() + ".out";
+      log_file.open(filename, std::ios::out);
     }
 
     /**
@@ -58,7 +62,8 @@ class Ptag {
       std::string fn = std::string(fn_name);
       auto t = std::chrono::duration_cast<ms>(hi_res_clock::now().time_since_epoch()).count();
       tag_table[fn].push(t); 
-
+    
+      std::lock_guard<std::mutex> lock(ptags::ptag_global_mutex);
       log_file << format_output(fn, t, t, "start");
     }
 
@@ -73,7 +78,8 @@ class Ptag {
       
       long t0 = tag_table[fn].front();
       tag_table[fn].pop();
-      
+     
+      std::lock_guard<std::mutex> lock(ptags::ptag_global_mutex); 
       log_file << format_output(fn, t0, t, "end");
     }
 
@@ -95,9 +101,6 @@ class Ptag {
       const long t2,
       const std::string msg) {
       
-
-      std::cout << "t1: " << t1 << "\nt2: " << t2 << std::endl;
-      std::cout << "dif: " << t2 - t1 << std::endl;
       std::stringstream ss;
       ss << ptags::DateTime::formatted_time_now() << "\t" << "[" << name << "]"
          << "\t" << t2 - t1 << "\t" << msg << "\n";
